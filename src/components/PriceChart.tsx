@@ -8,7 +8,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
-import { Info } from "lucide-react";
+import { Info, AlertCircle } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
+  ResponsiveContainer,
+  Area,
+  AreaChart,
+} from "recharts";
 
 interface PricePoint {
   timestamp: number;
@@ -100,141 +114,206 @@ const generateMockData = (
   return data;
 };
 
+const formatChartData = (data: PricePoint[]) => {
+  return data.map((point) => ({
+    time: new Date(point.timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    date: new Date(point.timestamp).toLocaleDateString(),
+    price: point.price,
+    open: point.open,
+    high: point.high,
+    low: point.low,
+    close: point.close,
+    volume: point.volume,
+  }));
+};
+
 const PriceChart: React.FC<PriceChartProps> = ({
   data,
   currency = "Bitcoin (BTC)",
   chartType = "line",
   timeframe = "1D",
-  isLoading = false,
+  isLoading: initialLoading = false,
   onChartTypeChange,
   onTimeframeChange,
 }) => {
   const [chartData, setChartData] = useState<PricePoint[]>([]);
-  const [hoveredPoint, setHoveredPoint] = useState<PricePoint | null>(null);
+  const [formattedData, setFormattedData] = useState<any[]>([]);
   const [currentPrice, setCurrentPrice] = useState<number>(0);
   const [priceChange, setPriceChange] = useState<{
     value: number;
     percentage: number;
   }>({ value: 0, percentage: 0 });
+  const [isLoading, setIsLoading] = useState<boolean>(initialLoading);
+  const [error, setError] = useState<string | null>(null);
+  const [isLiveData, setIsLiveData] = useState<boolean>(false);
 
   useEffect(() => {
-    // Use provided data or generate mock data
-    const newData = data || generateMockData(timeframe, chartType);
-    setChartData(newData);
+    setIsLoading(true);
+    setError(null);
 
-    if (newData.length > 0) {
-      const latest = newData[newData.length - 1].price;
-      const earliest = newData[0].price;
+    // Generate mock data if no data is provided
+    const mockData = data || generateMockData(timeframe, chartType);
+    setChartData(mockData);
+    setFormattedData(formatChartData(mockData));
+    setIsLiveData(false);
+    setIsLoading(false);
+
+    if (mockData.length > 0) {
+      const latest = mockData[mockData.length - 1].price;
+      const earliest = mockData[0].price;
       setCurrentPrice(latest);
       const changeValue = latest - earliest;
       const changePercentage = (changeValue / earliest) * 100;
       setPriceChange({ value: changeValue, percentage: changePercentage });
     }
-  }, [data, timeframe, chartType]);
+  }, [data, currency, timeframe, chartType]);
 
   const renderChart = () => {
     if (isLoading) {
       return <Skeleton className="w-full h-[400px] rounded-lg" />;
     }
 
-    if (chartData.length === 0) {
+    if (formattedData.length === 0) {
       return (
-        <div className="flex items-center justify-center h-[400px]">
+        <div className="flex items-center justify-center h-[400px] bg-gray-900">
           No data available
         </div>
       );
     }
 
-    // Calculate chart dimensions
-    const width = 100;
-    const height = 400;
-    const padding = { top: 20, right: 20, bottom: 30, left: 50 };
-    const chartWidth = width - padding.left - padding.right;
-    const chartHeight = height - padding.top - padding.bottom;
-
-    // Find min and max values for scaling
-    const prices = chartData.map((d) => d.price);
-    const minPrice = Math.min(...prices) * 0.99;
-    const maxPrice = Math.max(...prices) * 1.01;
-
-    // This is a placeholder for the actual chart rendering
-    // In a real implementation, you would use a charting library like recharts, d3, or chart.js
-    return (
-      <div className="relative w-full h-[400px] bg-gray-900 rounded-lg">
-        <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-          <p className="text-sm">
-            Chart visualization would be rendered here using a library like
-            recharts
-          </p>
-        </div>
-
-        {/* Sample visualization to show the concept */}
-        <div className="absolute inset-0 flex items-end">
-          {chartData.map((point, index) => {
-            const height =
-              ((point.price - minPrice) / (maxPrice - minPrice)) * 70;
-            const isPositive =
-              index > 0 ? point.price >= chartData[index - 1].price : true;
-
-            return (
-              <div
-                key={index}
-                className="flex-1 flex items-end justify-center hover:bg-gray-800/20 group"
-                onMouseEnter={() => setHoveredPoint(point)}
-                onMouseLeave={() => setHoveredPoint(null)}
-              >
-                <div
-                  className={`w-[80%] ${isPositive ? "bg-green-500" : "bg-red-500"}`}
-                  style={{ height: `${height}%`, minHeight: "1px" }}
-                ></div>
-
-                {hoveredPoint === point && (
-                  <div className="absolute bottom-full mb-2 bg-gray-800 text-white text-xs p-2 rounded pointer-events-none">
-                    <p>
-                      Price: $
-                      {point.price.toLocaleString(undefined, {
-                        maximumFractionDigits: 2,
-                      })}
-                    </p>
-                    <p>
-                      Time: {new Date(point.timestamp).toLocaleTimeString()}
-                    </p>
-                    {chartType === "candlestick" && point.open && (
-                      <>
-                        <p>
-                          Open: $
-                          {point.open.toLocaleString(undefined, {
-                            maximumFractionDigits: 2,
-                          })}
-                        </p>
-                        <p>
-                          High: $
-                          {point.high?.toLocaleString(undefined, {
-                            maximumFractionDigits: 2,
-                          })}
-                        </p>
-                        <p>
-                          Low: $
-                          {point.low?.toLocaleString(undefined, {
-                            maximumFractionDigits: 2,
-                          })}
-                        </p>
-                        <p>
-                          Close: $
-                          {point.close?.toLocaleString(undefined, {
-                            maximumFractionDigits: 2,
-                          })}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
+    if (chartType === "line") {
+      return (
+        <ResponsiveContainer width="100%" height={400}>
+          <AreaChart
+            data={formattedData}
+            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+          >
+            <defs>
+              <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
+                <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <XAxis
+              dataKey={timeframe === "1D" ? "time" : "date"}
+              tick={{ fill: "#9ca3af" }}
+              axisLine={{ stroke: "#4b5563" }}
+            />
+            <YAxis
+              domain={["auto", "auto"]}
+              tick={{ fill: "#9ca3af" }}
+              axisLine={{ stroke: "#4b5563" }}
+              tickFormatter={(value) => `$${value.toLocaleString()}`}
+            />
+            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+            <RechartsTooltip
+              contentStyle={{
+                backgroundColor: "#1f2937",
+                borderColor: "#4b5563",
+                color: "#f9fafb",
+              }}
+              formatter={(value: any) => [
+                `$${value.toLocaleString()}`,
+                "Price",
+              ]}
+            />
+            <Area
+              type="monotone"
+              dataKey="price"
+              stroke="#8884d8"
+              fillOpacity={1}
+              fill="url(#colorPrice)"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      );
+    } else {
+      // Candlestick chart
+      return (
+        <ResponsiveContainer width="100%" height={400}>
+          <div className="flex flex-col h-full">
+            <div className="flex-grow">
+              <ResponsiveContainer width="100%" height="70%">
+                <LineChart
+                  data={formattedData}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                >
+                  <XAxis
+                    dataKey={timeframe === "1D" ? "time" : "date"}
+                    tick={{ fill: "#9ca3af" }}
+                    axisLine={{ stroke: "#4b5563" }}
+                  />
+                  <YAxis
+                    domain={["auto", "auto"]}
+                    tick={{ fill: "#9ca3af" }}
+                    axisLine={{ stroke: "#4b5563" }}
+                    tickFormatter={(value) => `$${value.toLocaleString()}`}
+                  />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      borderColor: "#4b5563",
+                      color: "#f9fafb",
+                    }}
+                    formatter={(value: any) => [
+                      `$${value.toLocaleString()}`,
+                      "Price",
+                    ]}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="high"
+                    stroke="#10b981"
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="low"
+                    stroke="#ef4444"
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="h-[30%]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={formattedData}
+                  margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                >
+                  <XAxis
+                    dataKey={timeframe === "1D" ? "time" : "date"}
+                    tick={{ fill: "#9ca3af" }}
+                    axisLine={{ stroke: "#4b5563" }}
+                  />
+                  <YAxis
+                    tick={{ fill: "#9ca3af" }}
+                    axisLine={{ stroke: "#4b5563" }}
+                    tickFormatter={(value) => `${value}`}
+                  />
+                  <RechartsTooltip
+                    contentStyle={{
+                      backgroundColor: "#1f2937",
+                      borderColor: "#4b5563",
+                      color: "#f9fafb",
+                    }}
+                    formatter={(value: any) => [
+                      value.toLocaleString(),
+                      "Volume",
+                    ]}
+                  />
+                  <Bar dataKey="volume" fill="#6366f1" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </ResponsiveContainer>
+      );
+    }
   };
 
   return (
@@ -256,6 +335,11 @@ const PriceChart: React.FC<PriceChartProps> = ({
                 {priceChange.percentage >= 0 ? "+" : ""}
                 {priceChange.percentage.toFixed(2)}%
               </span>
+              {isLiveData && (
+                <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+                  LIVE
+                </span>
+              )}
             </div>
           </div>
 
@@ -269,11 +353,19 @@ const PriceChart: React.FC<PriceChartProps> = ({
               <TooltipContent side="left">
                 <p className="text-sm">
                   Price data for {currency} over {timeframe} timeframe
+                  {isLiveData ? " (live data)" : " (simulated data)"}
                 </p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
+
+        {error && (
+          <div className="mb-2 px-3 py-2 bg-red-900/20 border border-red-800 rounded text-red-400 text-xs flex items-center">
+            <AlertCircle size={14} className="mr-2" />
+            {error}
+          </div>
+        )}
 
         <div className="flex-grow">{renderChart()}</div>
 
